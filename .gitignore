@@ -1,2 +1,7 @@
 .venv/
 venv/
+.decisions/
+data/
+__pycache__/
+.pytest_cache/
+*.zip

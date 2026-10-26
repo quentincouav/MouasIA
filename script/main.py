@@ -47,8 +47,7 @@ def resolve_month(month):
 @app.get("/")
 def home():
     return {"observatoire": "Wikipédia France 2027", "mois_disponibles": available_months(),
-            "routes": ["/months", "/themes", "/summary", "/data/{n}", "/graph", "/top",
-                       "/page/{title}", "/evolution/{title}", "/update"]}
+            "routes": ["/months", "/themes", "/summary", "/data/{n}", "/graph", "/update"]}
 
 @app.get("/months")
 def months():

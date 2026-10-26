@@ -9,8 +9,16 @@ import pandas as pd
 
 BASE_URL = "https://dumps.wikimedia.org/other/clickstream"
 WIKI = "frwiki"
-RAW_DIR = os.path.join("data", "raw")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.environ.get("MAOUSS_DATA_DIR", os.path.join(PROJECT_ROOT, "data"))
+RAW_DIR = os.path.join(DATA_DIR, "raw")
 COLUMNS = ["prev", "curr", "type", "n"]
+
+# Wikimedia renvoie 403 au User-Agent par défaut de urllib
+# https://meta.wikimedia.org/wiki/User-Agent_policy
+USER_AGENT = os.environ.get("MAOUSS_USER_AGENT",
+                            "MaoussIA-observatoire/0.1 (projet etudiant EPITA)")
+HEADERS = {"User-Agent": USER_AGENT}
 
 READ_OPTIONS = dict(
     sep="\t",
@@ -29,12 +37,14 @@ def clickstream_url(month: str, wiki: str = WIKI) -> str:
 
 
 def month_is_available(month: str, wiki: str = WIKI) -> bool:
-    req = urllib.request.Request(clickstream_url(month, wiki), method="HEAD")
+    req = urllib.request.Request(clickstream_url(month, wiki), method="HEAD", headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.status == 200
-    except (urllib.error.URLError, TimeoutError):
-        return False
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise  # 403, 5xx... : ne pas confondre avec un mois non publié
 
 
 def previous_months(start: date, count: int):
@@ -80,7 +90,8 @@ def download_clickstream(month: str, wiki: str = WIKI, raw_dir: str = RAW_DIR,
     url = clickstream_url(month, wiki)
     print(f"[extraction] téléchargement {url}")
     tmp = path + ".part"
-    with urllib.request.urlopen(url, timeout=120) as resp, open(tmp, "wb") as f:
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=120) as resp, open(tmp, "wb") as f:
         shutil.copyfileobj(resp, f, length=1 << 20)
     os.replace(tmp, path) 
     return path
