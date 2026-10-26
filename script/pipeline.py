@@ -5,11 +5,11 @@ from datetime import datetime
 
 import pandas as pd
 
-from extrate import (download_clickstream, info_data, latest_available_month,
+from extrate import (DATA_DIR, download_clickstream, info_data, latest_available_month,
                      months_between, read_data)
 from graph import THEMES, create_graph, graph_info, graph_metrics, save_graph, theme_mask
 
-PROCESSED_DIR = os.path.join("data", "processed")
+PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 HISTORY_FILE = os.path.join(PROCESSED_DIR, "history.csv")
 
 
