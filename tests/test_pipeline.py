@@ -38,6 +38,15 @@ def test_history_replaces_month(clickstream_file, data_dir):
     assert (data_dir / "latest.txt").read_text() == "2026-02"
 
 
+def test_run_month_with_crawler_pages(clickstream_file, data_dir):
+    summary = pipeline.run_month("2026-01", local_file=clickstream_file, verbose=False,
+                                 pages={"Brigitte_Macron": 0.95}, min_score=0.9)
+    assert summary["perimetre"] == {"pages_crawler": 1, "score_min": 0.9}
+    assert summary["pages_par_theme"]["Autres sujets politiques"] == 1
+    hist = pd.read_csv(pipeline.HISTORY_FILE)
+    assert hist.set_index("page").loc["Brigitte_Macron", "pertinence"] == 0.95
+
+
 def test_summary_json_is_valid(clickstream_file, data_dir):
     pipeline.run_month("2026-01", local_file=clickstream_file, verbose=False)
     with open(data_dir / "2026-01" / "summary.json", encoding="utf-8") as f:

@@ -93,24 +93,48 @@ def is_in_theme(title, themes=THEMES):
     return match_theme(title, themes) is not None
 
 
-def theme_mask(df: pd.DataFrame, themes=THEMES) -> pd.Series:
+# Sous-thème des pages retenues par le crawler mais sans mot-clé reconnu
+CRAWLER_THEME = "Autres sujets politiques"
+
+
+def make_classifier(themes=THEMES, pages=None):
+    """
+    title -> sous-thème ou None.
+    pages : {titre: score} du crawler (relevant_pages). Les mots-clés donnent le
+    sous-thème ; une page du crawler sans mot-clé reçoit CRAWLER_THEME.
+    """
+    compiled = _compile(themes)
+    pages = pages or {}
+
+    def classify(title):
+        theme = match_theme(title, themes, compiled)
+        if theme is None and title in pages:
+            return CRAWLER_THEME
+        return theme
+    return classify
+
+
+def theme_mask(df: pd.DataFrame, themes=THEMES, pages=None) -> pd.Series:
     """
     Masque des lignes à garder.
     """
-    compiled = _compile(themes)
+    classify = make_classifier(themes, pages)
     titles = pd.unique(pd.concat([df["prev"], df["curr"]], ignore_index=True))
-    mapping = {t: match_theme(t, themes, compiled) for t in titles}
+    mapping = {t: classify(t) for t in titles}
     curr_in = df["curr"].map(mapping).notna()
     prev_in = df["prev"].map(mapping).notna()
     return curr_in | prev_in
 
-def create_graph(data: pd.DataFrame, themes=THEMES, core_only: bool = False) -> nx.DiGraph:
+def create_graph(data: pd.DataFrame, themes=THEMES, core_only: bool = False,
+                 pages=None) -> nx.DiGraph:
     """
     data : lignes clickstream.
     core_only : si True, ne garde que les articles du thème.
+    pages : {titre: score} du crawler, ajoutées au périmètre des mots-clés.
     """
-    compiled = _compile(themes)
-    df = data[theme_mask(data, themes)] if len(data) else data
+    classify = make_classifier(themes, pages)
+    pages = pages or {}
+    df = data[theme_mask(data, themes, pages)] if len(data) else data
 
     is_external = df["prev"].str.startswith("other-")
     internal = df[~is_external]
@@ -131,9 +155,10 @@ def create_graph(data: pd.DataFrame, themes=THEMES, core_only: bool = False) -> 
             G.nodes[page]["entrees_" + source.replace("other-", "")] = int(val)
 
     for node in G.nodes:
-        theme = match_theme(node, themes, compiled)
+        theme = classify(node)
         G.nodes[node]["theme"] = theme or "hors_theme"
         G.nodes[node]["in_theme"] = theme is not None
+        G.nodes[node]["pertinence"] = pages.get(node)
 
     if core_only:
         G = G.subgraph([n for n, d in G.nodes(data=True) if d["in_theme"]]).copy()
@@ -159,6 +184,7 @@ def graph_metrics(G: nx.DiGraph, only_theme: bool = True) -> pd.DataFrame:
             "page": node,
             "theme": d.get("theme"),
             "in_theme": d.get("in_theme", False),
+            "pertinence": d.get("pertinence"),
             "pagerank": pagerank.get(node, 0.0),
             "clics_entrants": in_s.get(node, 0),
             "clics_sortants": out_s.get(node, 0),

@@ -60,6 +60,25 @@ def test_graph_metrics():
     assert macron["audience_estimee"] == macron["clics_entrants"] + 1400
 
 
+def test_crawler_pages_extend_scope():
+    pages = {"Brigitte_Macron": 0.93, "Marine_Le_Pen": 0.99}
+    G = graph.create_graph(DF, pages=pages)
+    assert G.nodes["Brigitte_Macron"]["in_theme"]
+    assert G.nodes["Brigitte_Macron"]["theme"] == graph.CRAWLER_THEME
+    assert G.nodes["Brigitte_Macron"]["pertinence"] == 0.93
+    # le mot-clé garde la priorité pour le sous-thème
+    assert G.nodes["Marine_Le_Pen"]["theme"] == "Personnalités"
+    assert G.nodes["Marine_Le_Pen"]["pertinence"] == 0.99
+    assert G.nodes["Emmanuel_Macron"]["pertinence"] is None
+
+
+def test_crawler_pages_bring_new_rows():
+    mask_kw = graph.theme_mask(DF)
+    mask_pages = graph.theme_mask(DF, pages={"Croissant": 0.91})
+    assert not mask_kw[DF["curr"] == "Croissant"].any()
+    assert mask_pages[DF["curr"] == "Croissant"].all()
+
+
 def test_graph_metrics_empty():
     import networkx as nx
     assert graph.graph_metrics(nx.DiGraph()).empty

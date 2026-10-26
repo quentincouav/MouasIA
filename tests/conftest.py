@@ -40,4 +40,6 @@ def data_dir(tmp_path, monkeypatch):
     processed = tmp_path / "processed"
     monkeypatch.setattr(pipeline, "PROCESSED_DIR", str(processed))
     monkeypatch.setattr(pipeline, "HISTORY_FILE", str(processed / "history.csv"))
+    # mots-clés seuls : les tests ne dépendent pas du submodule
+    monkeypatch.setattr(pipeline, "default_pages", lambda min_score=None: {})
     return processed

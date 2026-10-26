@@ -8,6 +8,7 @@ import pandas as pd
 from extrate import (DATA_DIR, download_clickstream, info_data, latest_available_month,
                      months_between, read_data)
 from graph import THEMES, create_graph, graph_info, graph_metrics, save_graph, theme_mask
+from relevant_pages import DEFAULT_MIN_SCORE, default_pages
 
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 HISTORY_FILE = os.path.join(PROCESSED_DIR, "history.csv")
@@ -23,7 +24,7 @@ def is_processed(month: str) -> bool:
 
 def update_history(month: str, metrics: pd.DataFrame):
     cols = ["month", "page", "theme", "rang", "pagerank", "clics_entrants",
-            "entrees_externes", "audience_estimee"]
+            "entrees_externes", "audience_estimee", "pertinence"]
     new = metrics.assign(month=month)[cols]
     if os.path.exists(HISTORY_FILE):
         old = pd.read_csv(HISTORY_FILE, keep_default_na=False)
@@ -33,19 +34,24 @@ def update_history(month: str, metrics: pd.DataFrame):
 
 
 def run_month(month: str, local_file: str = None, keep_raw: bool = True,
-              force: bool = False, themes=THEMES, verbose: bool = True) -> dict:
+              force: bool = False, themes=THEMES, verbose: bool = True,
+              pages: dict = None, min_score: float = DEFAULT_MIN_SCORE) -> dict:
+    """pages : {titre: score} à ajouter aux mots-clés (défaut : liste du submodule)."""
     if is_processed(month) and not force:
         print(f"[pipeline] {month} déjà traité (utiliser --force pour refaire)")
         with open(os.path.join(month_dir(month), "summary.json"), encoding="utf-8") as f:
             return json.load(f)
 
+    if pages is None:
+        pages = default_pages(min_score)
+
     path = local_file or download_clickstream(month)
 
-    data = read_data(path, filter_fn=lambda chunk: theme_mask(chunk, themes))
+    data = read_data(path, filter_fn=lambda chunk: theme_mask(chunk, themes, pages))
     if verbose:
         info_data(data)
 
-    G = create_graph(data, themes)
+    G = create_graph(data, themes, pages=pages)
     if verbose:
         graph_info(G)
     metrics = graph_metrics(G)
@@ -63,6 +69,7 @@ def run_month(month: str, local_file: str = None, keep_raw: bool = True,
         "nodes": G.number_of_nodes(),
         "edges": G.number_of_edges(),
         "pages_theme": int(len(metrics)),
+        "perimetre": {"pages_crawler": len(pages), "score_min": min_score},
         "pages_par_theme": metrics["theme"].value_counts().to_dict() if len(metrics) else {},
         "top10": metrics.head(10)[["page", "theme", "pagerank"]].to_dict("records"),
     }
@@ -88,6 +95,8 @@ def main():
     p.add_argument("--local", help="fichier clickstream local (.tsv ou .tsv.gz)")
     p.add_argument("--force", action="store_true", help="retraiter un mois déjà traité")
     p.add_argument("--no-keep-raw", action="store_true", help="supprimer le dump après traitement")
+    p.add_argument("--min-score", type=float, default=DEFAULT_MIN_SCORE,
+                   help="score minimal des pages du crawler (défaut : %(default)s)")
     p.add_argument("--quiet", action="store_true")
     args = p.parse_args()
 
@@ -100,10 +109,12 @@ def main():
     else:
         months = [latest_available_month()]
 
+    pages = default_pages(args.min_score)  # chargée une fois pour tous les mois
     for m in months:
         try:
             run_month(m, local_file=args.local, keep_raw=not args.no_keep_raw,
-                      force=args.force, verbose=not args.quiet)
+                      force=args.force, verbose=not args.quiet,
+                      pages=pages, min_score=args.min_score)
         except Exception as e:
             print(f"[pipeline] ERREUR {m} : {e}")
 
