@@ -1,0 +1,3 @@
+[submodule "external/find_relevant_wiki_pages"]
+	path = external/find_relevant_wiki_pages
+	url = git@gitlab.cri.epita.fr:arthur.magnin/find_relevant_wiki_pages.git
